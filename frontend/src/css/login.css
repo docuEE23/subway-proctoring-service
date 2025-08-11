@@ -45,3 +45,13 @@
   .you{align-self:flex-end;background:#e9f1ff} .them{align-self:flex-start;background:#fff}
   .report-table{width:100%;border-collapse:collapse}
   .report-table th,.report-table td{border:1px solid var(--line);padding:8px;text-align:left}
+
+.ai-rule-label {
+  border: 2px solid transparent; /* Reserve space for border */
+  border-radius: 10px; /* Match existing button/card styles */
+  padding: 5px; /* Add some padding to make border visible */
+}
+
+.ai-rule-checked {
+  border-color: var(--acc); /* Change only color when checked */
+}

@@ -11,10 +11,10 @@ const AdminPage = () => {
     windowSwitch: true,
     forbiddenItem: false,
   });
+  const [examParticipants, setExamParticipants] = useState('');
 
   // API 응답 및 UI 상태
   const [createdSession, setCreatedSession] = useState(null); // 생성된 세션 정보 저장 {id, name, ...}
-  const [joinCode, setJoinCode] = useState(null); // 참여 코드 저장 {code, expires_at}
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -55,33 +55,7 @@ const AdminPage = () => {
     }
   };
 
-  // 참여 코드 생성 API 호출
-  const handleGenerateCode = async () => {
-    if (!createdSession) {
-      setError('먼저 세션을 생성해야 합니다.');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetch(`/api/v1/sessions/${createdSession.id}/code`, {
-        method: 'POST',
-      });
-
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || '참여코드 생성에 실패했습니다.');
-      }
-
-      const codeData = await response.json();
-      setJoinCode(codeData);
-
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  
 
   return (
     <main>
@@ -109,36 +83,47 @@ const AdminPage = () => {
             
             <label>AI 감지 규칙</label>
             <div className="row">
-              <label><input type="checkbox" name="gaze" checked={aiRules.gaze} onChange={handleCheckboxChange} /> 시선 이탈</label>
-              <label><input type="checkbox" name="windowSwitch" checked={aiRules.windowSwitch} onChange={handleCheckboxChange} /> 창 전환</label>
-              <label><input type="checkbox" name="forbiddenItem" checked={aiRules.forbiddenItem} onChange={handleCheckboxChange} /> 금지 물품</label>
+              <label className={aiRules.gaze ? 'ai-rule-checked ai-rule-label' : 'ai-rule-label'}><input type="checkbox" name="gaze" checked={aiRules.gaze} onChange={handleCheckboxChange} /> 시선 이탈</label>
+              <label className={aiRules.windowSwitch ? 'ai-rule-checked ai-rule-label' : 'ai-rule-label'}><input type="checkbox" name="windowSwitch" checked={aiRules.windowSwitch} onChange={handleCheckboxChange} /> 창 전환</label>
+              <label className={aiRules.forbiddenItem ? 'ai-rule-checked ai-rule-label' : 'ai-rule-label'}><input type="checkbox" name="forbiddenItem" checked={aiRules.forbiddenItem} onChange={handleCheckboxChange} /> 금지 물품</label>
             </div>
+
+            {/* New input field for Exam Participants */}
+            <label htmlFor="examParticipants">시험 인수</label>
+            <input
+              id="examParticipants"
+              type="number"
+              value={examParticipants}
+              onChange={(e) => setExamParticipants(e.target.value)}
+              placeholder="시험에 참여할 인원수를 입력하세요"
+            />
 
             <div className="row" style={{ marginTop: '10px' }}>
               <button className="btn" onClick={handleCreateSession} disabled={loading}>
                 {loading ? '생성 중...' : '세션 생성'}
               </button>
-              <button className="btn flat" onClick={handleGenerateCode} disabled={loading || !createdSession}>
-                참여코드 생성
-              </button>
             </div>
 
-            {joinCode && (
-              <div id="codeBox" className="kpi" style={{ marginTop: '10px', display: 'flex' }}>
-                <div className="chip">참여코드: <b>{joinCode.code}</b></div>
-                <div className="chip">유효: 15분</div>
-                <div className="chip">1회용</div>
-              </div>
-            )}
-
-            {error && <p style={{ color: 'red', marginTop: '10px' }}>{error}</p>}
+            
 
           </div>
           <div className="card">
             <h3>상태</h3>
-            {createdSession ? (
+            {error ? (
+              <p style={{ color: 'red' }}>{error}</p>
+            ) : createdSession ? (
               <div className="list">
-                <div className="item"><span>세션 생성됨: ${createdSession.name}</span><span className="badge">ID: ${createdSession.id}</span></div>
+                <div className="item"><span>세션 이름: <b>{createdSession.name}</b></span></div>
+                <div className="item"><span>세션 ID: <b>{createdSession.id}</b></span></div>
+                <div className="item"><span>시작 시간: <b>{createdSession.start_time}</b></span></div>
+                <div className="item"><span>종료 시간: <b>{createdSession.end_time}</b></span></div>
+                <div className="item"><span>AI 규칙: </span>
+                  <span>
+                    {createdSession.ai_rules.gaze && '시선 이탈, '}
+                    {createdSession.ai_rules.windowSwitch && '창 전환, '}
+                    {createdSession.ai_rules.forbiddenItem && '금지 물품'}
+                  </span>
+                </div>
               </div>
             ) : (
               <p>새로운 세션을 생성하세요.</p>
