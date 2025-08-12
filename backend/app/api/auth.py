@@ -1,0 +1,123 @@
+from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException, Body
+from pydantic import BaseModel, Field
+import bcrypt, secrets
+import jwt
+
+from backend.app.db import User, LoginRequest, Logs, user_crud
+
+auth_router = APIRouter()
+
+# --- Request/Response Models ---
+
+class LoginRequestModel(BaseModel):
+    user_id: str = Field(..., description="사용자 아이디")
+    password: str = Field(..., description="비밀번호")
+
+class LoginResponseModel(BaseModel):
+    token: str = Field(description="발급된 JWT Access Token")
+    role: str = Field(description="사용자 역할")
+    expires_at: datetime = Field(description="토큰 만료 시간")
+
+# --- Helper Functions ---
+
+def create_jwt(user_id: str, role: str, expires_delta: timedelta) -> tuple[str, datetime]:
+    """JWT를 생성하고 만료 시간을 반환합니다."""
+    expire = datetime.now() + expires_delta
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": expire
+    }
+    # In a real application, use a strong, secret key and load it from configuration
+    secret_key = "YOUR_SUPER_SECRET_KEY"
+    token = jwt.encode(payload, secret_key, algorithm="HS256")
+    return token, expire
+
+# --- API Endpoint ---
+
+@auth_router.post("/auth/login", response_model=LoginResponseModel)
+async def login(request: LoginRequestModel = Body(...)):
+    """
+    사용자 로그인을 처리하고 JWT를 발급합니다.
+    """
+    # 3. 로그인 시도 횟수 제한
+    login_attempt = await LoginRequest.find_one(LoginRequest.request_id == request.user_id)
+    now = datetime.now()
+
+    if login_attempt and login_attempt.last_request_time > now - timedelta(minutes=10):
+        if login_attempt.request_count >= 5:
+            raise HTTPException(
+                status_code=429,
+                detail="로그인 시도가 너무 많습니다. 잠시 후 다시 시도해주세요."
+            )
+        login_attempt.request_count += 1
+        login_attempt.last_request_time = now
+        await login_attempt.save()
+    else:
+        # 10분이 지났거나 첫 시도인 경우
+        login_attempt = LoginRequest(
+            request_id=request.user_id,
+            last_request_time=now,
+            request_count=1
+        )
+        await login_attempt.save()
+
+
+    # 4. 데이터베이스 조회
+    user = await User.find_one(User.user_id == request.user_id)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "AUTH_INVALID", "message": "잘못된 아이디 또는 비밀번호입니다."}
+        )
+
+    # 5. 비밀번호 검증
+    if not bcrypt.checkpw(request.password.encode('utf-8'), user.pwd.encode('utf-8')):
+        raise HTTPException(
+            status_code=401,
+            detail={"code": "AUTH_INVALID", "message": "잘못된 아이디 또는 비밀번호입니다."}
+        )
+
+    # 6. JWT 생성
+    await login_attempt.delete() # 성공 시 시도 횟수 리셋
+    token, expires_at = create_jwt(user.user_id, user.role, timedelta(hours=1))
+
+    # 7. 성공 로그 기록
+    log_entry = Logs(
+        user_id=user,
+        url_path="/auth/login",
+        log_type="LOGIN_SUCCESS"
+    )
+    await log_entry.save()
+
+    return LoginResponseModel(
+        token=token,
+        role=user.role,
+        expires_at=expires_at
+    )
+
+
+class TestModel(BaseModel):
+
+    name: str
+    role: str
+
+
+@auth_router.post("/create_user_test")
+async def create_user_test(request: TestModel = Body(...)):
+    print(request.model_dump())
+    pwd : str = "pwd_" + secrets.token_urlsafe(25)
+    user_id: str = "user_id_" + secrets.token_urlsafe(25)
+    user: User = User(user_id=user_id, name=request.name, role=request.role, pwd=pwd)
+    await user_crud.create(user)
+    return
+
+
+@auth_router.post("/get_exist_user_test")
+async def get_exist_user_test(request: TestModel = Body(...)):
+    print(request.model_dump())
+    user: User | None = await user_crud.get_by(request.model_dump())
+    if user:
+        return {"result" : user.model_dump_json()}
+    return {"result": "None"}
