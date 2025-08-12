@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 .gemini
 *.md
+.idea
 *.html
 # C extensions
 *.so
