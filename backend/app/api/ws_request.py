@@ -4,9 +4,9 @@ from typing import Dict, List, Optional, Literal
 import httpx
 from fastapi import APIRouter, Depends, WebSocket
 from fastapi import WebSocketDisconnect, status
-from backend.app.db.models import Logs, LogContent
-from backend.app.db.model_functions import logs_crud, user_crud
-from backend.app.core import AuthenticationChecker, UserInfo
+from backend.app.db import Logs, LogContent, User
+from backend.app.db import logs_crud, user_crud
+from backend.app.core import AuthenticationChecker
 
 # In a real application, load this from a secure configuration
 VIDEO_SERVER_URL = "http://localhost:9099/signal/{exam_id}"
@@ -133,7 +133,7 @@ class ConnectionManager:
         user = await user_crud.get_by({"user_id": user_id})
         if user:
             log_entry = Logs(
-                user_id=user.id,
+                user_id=user.to_ref(),
                 log_type=log_type,
                 url_path=url_path,
                 content=content
@@ -149,11 +149,11 @@ manager = ConnectionManager()
 async def websocket_endpoint(
         websocket: WebSocket,
         exam_id: str,
-        user_info: UserInfo = Depends(AuthenticationChecker(role=["admin", "examinee", "supervisor"]))
+        user_info: User = Depends(AuthenticationChecker(role=["admin", "examinee", "supervisor"]))
 ):
     """Main WebSocket endpoint for signaling and messaging."""
 
-    await manager.connect(websocket, exam_id, user_info.user_id, user_info.user_role)
+    await manager.connect(websocket, exam_id, user_info.user_id, user_info.role)
 
     try:
         while True:

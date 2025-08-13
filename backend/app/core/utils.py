@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, UTC
 import jwt, os
 from typing import List, Literal
-from pydantic import BaseModel
 from dotenv import load_dotenv
 from fastapi import Request, HTTPException
 from backend.app.db import user_crud, User
@@ -22,15 +21,9 @@ def create_jwt(user_id: str, role: str, expires_delta: timedelta) -> tuple[str, 
     return token, expire
 
 
-class UserInfo(BaseModel):
-
-    user_id: str
-    user_role: Literal["examinee", "admin", "supervisor"]
-
-
 class AuthenticationChecker:
     """
-    __call__ 메서드의 반환 값이 필요할 땐, uid: str = Depends(AuthenticationChecker(role=["admin", "examinee"])) 같이 사용 됩니다..
+    __call__ 메서드의 반환 값이 필요할 땐, user_info: User = Depends(AuthenticationChecker(role=["admin", "examinee"])) 같이 사용 됩니다..
     만약 필요하지 않다면 @router.post("/url", dependencies=[Depends(AuthenticationChecker(role=["admin"]))]) 와 같이 사용 됩니다.
     """
 
@@ -59,7 +52,7 @@ class AuthenticationChecker:
             user : User | None = await user_crud.get_by({"user_id" : user_id, "role" : user_role})
             if not user:
                 raise HTTPException(status_code=403, detail="not exist")
-            return UserInfo(user_id=user_id, user_role=user_role)
+            return user
 
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token has expired")

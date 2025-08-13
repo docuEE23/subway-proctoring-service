@@ -1,1 +1,1 @@
-from backend.app.core.utils import create_jwt, AuthenticationChecker, UserInfo
+from backend.app.core.utils import create_jwt, AuthenticationChecker

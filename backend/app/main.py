@@ -10,7 +10,7 @@ sys.path.append(path + "/backend/app")
 from fastapi import FastAPI
 from db import lifespan
 from fastapi.middleware.cors import CORSMiddleware
-from api import auth_router, ws_request_router
+from api import auth_router, ws_request_router, session_router
 
 app = FastAPI(lifespan=lifespan)
 
@@ -25,6 +25,7 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(ws_request_router, prefix="/api/v1")
+app.include_router(session_router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

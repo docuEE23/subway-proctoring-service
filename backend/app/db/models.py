@@ -64,6 +64,14 @@ class LoginRequest(Document):
     last_request_time: datetime
     request_count: int
 
+    class Settings:
+        name="login_requests"
+        validate_on_save = True
+        indexes : list = [
+            "request_id"
+        ]
+
+
 class Examinee(Document):
     """
     세션에 참여한 응시자에 대한 정보
@@ -195,7 +203,7 @@ class Schedule(BaseModel):
 class Exam(Document):
 
     exam_title: str = Field(description="시험 제목")
-    exam_id: str = Field(description="연결된 시험의 ID")
+    exam_id: str
     proctor_id: str = Field(description="담당 감독관의 ID")
     created_at: datetime = Field(default_factory=datetime.now, description="시험 정보 생성 일시")
     exam_start_datetime: datetime
@@ -203,3 +211,10 @@ class Exam(Document):
     schedules: list[Schedule]
     contents: list[ExamContent]
     expected_examinee_ids: list[str]
+
+    class Settings:
+        name = "exams"
+        validate_on_save = True
+        indexes : list = [
+            "exam_id", "proctor_id"
+        ]

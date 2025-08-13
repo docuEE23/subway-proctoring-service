@@ -5,7 +5,6 @@ from uuid import uuid4
 from pydantic import BaseModel
 from backend.app.db import ExamDetectRule, ExamSession, User, Examinee, Exam
 from backend.app.db import Logs, logs_crud
-from backend.app.core.utils import UserInfo
 
 
 session_router = APIRouter(prefix="/session")
@@ -23,7 +22,7 @@ async def create_session(
     request: Request,
     response: Response,
     body: CreateSessionBody,
-    user_info: UserInfo = Depends(AuthenticationChecker(role=["admin"]))
+    user: User = Depends(AuthenticationChecker(role=["admin"]))
 ):
     session_id_from_cookie = request.cookies.get("session_id") # 쿠키로 있는 session_id 확인
     if session_id_from_cookie:
@@ -67,8 +66,6 @@ async def create_session(
         session_status='draft'
     )
     await exam_session_crud.create(new_session)
-    # TODO : 굳이 두번 해야 할까? user_info 에서 실제로 user 가 존재 하는지까지 확인하는데?
-    user: User | None = await user_crud.get_by({"user_id": user_info.user_id, "role": user_info.user_role})
     log = Logs(user_id=user.to_ref(),url_path="/session/create_session", log_type="SESSION_CREATED")
     await logs_crud.create(log)
 
@@ -84,7 +81,7 @@ class JoinSessionBody(BaseModel):
 async def join_session(
     response: Response,
     body: JoinSessionBody,
-    current_user: UserInfo = Depends(AuthenticationChecker(role=["examinee"]))
+    current_user: User = Depends(AuthenticationChecker(role=["examinee"]))
 ):
     # ## 시험 세션 참여
     # endpoint : POST "/join_session"
@@ -101,20 +98,15 @@ async def join_session(
     if session.session_status != 'ready':
         raise HTTPException(status_code=400, detail="Session is not ready to be joined")
 
-    # 인증된 사용자가 해당 세션의 응시 예정자(expected_examinee) 명단에 있는지 확인합니다.
-    # 명단에 없다면 에러를 발생시킵니다.
-    current_user_doc : User | None = await user_crud.get_by({"user_id": current_user.user_id})
-    if not current_user_doc:
-        raise HTTPException(status_code=404, detail="Authenticated user not found in database")
 
     expected_user_ids = [linked_user.ref.id for linked_user in session.expected_examinee]
-    if current_user_doc.id not in expected_user_ids: # TODO : 이게 맞나? Link 를 어떻게 쓰는지 모르겠다.
+    if current_user.id not in expected_user_ids:
         raise HTTPException(status_code=403, detail="User is not an expected examinee for this session.")
 
     # examinee_crud 를 사용하여 이미 해당 세션에 참여한 응시자인지 확인합니다.
     # 이미 참여했다면, 해당 정보를 반환합니다.
     existing_examinee : Examinee | None = await examinee_crud.get_by(
-        {'session_id': body.session_id, 'examinee': current_user_doc.to_ref()}
+        {'session_id': body.session_id, 'examinee': current_user.to_ref()}
     )
     if existing_examinee:
         return {"message": "User has already joined the session.", "examinee_info": existing_examinee.model_dump_json()}
@@ -126,14 +118,14 @@ async def join_session(
     new_examinee = Examinee(
         session_id=session.session_id,
         exam_id=session.exam_id,
-        examinee=current_user_doc.to_ref(),
+        examinee=current_user.to_ref(),
         status='connected'
     )
 
     # 생성된 Examinee 문서를 DB에 저장하고, 성공 메시지를 반환합니다.
     await examinee_crud.create(new_examinee)
     # 세션 참여에 대한 로그를 남깁니다.
-    log = Logs(user_id=current_user_doc.to_ref(), url_path="/session/join_session", log_type="JOIN_SESSION")
+    log = Logs(user_id=current_user.to_ref(), url_path="/session/join_session", log_type="JOIN_SESSION")
     await logs_crud.create(log)
 
     # session_id 를 쿠키에 넣어 보냅니다.

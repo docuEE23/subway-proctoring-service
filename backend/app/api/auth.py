@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Body, Response, Depends
 from pydantic import BaseModel, Field
 import bcrypt, secrets
-from backend.app.core import create_jwt, UserInfo, AuthenticationChecker
+from backend.app.core import create_jwt, AuthenticationChecker
 from backend.app.db import User, LoginRequest, Logs, user_crud
 
 auth_router = APIRouter()
@@ -111,9 +111,8 @@ async def get_exist_user_test(request: TestModel = Body(...)):
     return {"result": "None"}
 
 @auth_router.get("/aut_checker_test")
-async def auth_checker_test(user_info: UserInfo = Depends(AuthenticationChecker(role=["admin", "supervisor", "examinee"]))):
-    print(user_info.model_dump())
-    user: User | None = await user_crud.get_by({"user_id" : user_info.user_id})
+async def auth_checker_test(user: User = Depends(AuthenticationChecker(role=["admin", "supervisor", "examinee"]))):
+    print(user.model_dump())
     if user:
         return {"result" : user.model_dump_json()}
     return {"result": "None"}
