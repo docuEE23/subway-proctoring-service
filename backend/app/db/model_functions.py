@@ -104,7 +104,7 @@ class MongoCRUD(Generic[ModelType]):
 
 
 # Import all models from the models file
-from backend.app.db import models
+from db import models
 
 # Create CRUD instances for each model
 user_crud = MongoCRUD(models.User)

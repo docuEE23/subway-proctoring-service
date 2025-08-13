@@ -1,5 +1,4 @@
 import asyncio
-import json
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -9,14 +8,14 @@ from fastapi import (APIRouter, Cookie, Depends, HTTPException, WebSocket,
                    WebSocketDisconnect, status)
 from pydantic import BaseModel
 
-from ..db.models import Logs, User, LogContent
-from ..db.model_functions import logs_crud, user_crud
+from db.models import Logs, LogContent
+from db.model_functions import logs_crud, user_crud
 
 # In a real application, load this from a secure configuration
 JWT_SECRET_KEY = "YOUR_SUPER_SECRET_KEY"
 VIDEO_SERVER_URL = "http://localhost:9099/signal/{exam_id}"
 
-router = APIRouter()
+ws_request_router = APIRouter()
 
 
 class UserConnectionInfo(BaseModel):
@@ -34,6 +33,7 @@ class ConnectionManager:
 
     def __init__(self):
         self.connections: Dict[str, List[UserConnectionInfo]] = {}
+        return
 
     async def connect(self, websocket: WebSocket, exam_id: str, user_id: str, role: str):
         """Accept and store a new WebSocket connection."""
@@ -43,6 +43,7 @@ class ConnectionManager:
             self.connections[exam_id] = []
         self.connections[exam_id].append(connection_info)
         await self._log_event(user_id, "WEBSOCKET_CONNECTED", f"/ws/signal/{exam_id}")
+        return
 
     async def disconnect(self, websocket: WebSocket, exam_id: str):
         """Remove a WebSocket connection."""
@@ -55,6 +56,7 @@ class ConnectionManager:
             if connection_to_remove:
                 self.connections[exam_id].remove(connection_to_remove)
                 await self._log_event(connection_to_remove.user_id, "WEBSOCKET_DISCONNECT", f"/ws/signal/{exam_id}")
+        return
 
     def get_connection_info(self, websocket: WebSocket, exam_id: str) -> Optional[UserConnectionInfo]:
         """Retrieve connection info for a given websocket."""
@@ -74,6 +76,7 @@ class ConnectionManager:
         else:
             # This could be an error log or a specific action
             print(f"Error: User {user_id} not found in exam {exam_id}")
+        return
 
     async def broadcast(self, message: dict, exam_id: str, sender_id: str):
         """Broadcast a message to all users in an exam."""
@@ -86,6 +89,7 @@ class ConnectionManager:
             await asyncio.gather(*[
                 conn.websocket.send_json(message) for conn in self.connections[exam_id]
             ])
+        return
 
     async def handle_webrtc_offer(self, websocket: WebSocket, exam_id: str, data: dict):
         """Handle WebRTC offer and forward to video server."""
@@ -111,6 +115,7 @@ class ConnectionManager:
                 await websocket.send_json({"type": "error", "message": f"Failed to connect to video server: {e}"})
             except httpx.HTTPStatusError as e:
                 await websocket.send_json({"type": "error", "message": f"Video server error: {e.response.text}"})
+        return
 
 
     def _find_user_connection(self, user_id: str, exam_id: str) -> Optional[UserConnectionInfo]:
@@ -132,6 +137,7 @@ class ConnectionManager:
                 content=content
             )
             await logs_crud.create(log_entry)
+        return
 
 
 manager = ConnectionManager()
@@ -143,14 +149,14 @@ def get_user_from_cookie(jwt_token: Optional[str] = Cookie(None)) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing JWT token")
     try:
         payload = jwt.decode(jwt_token, JWT_SECRET_KEY, algorithms=["HS256"])
-        if datetime.fromtimestamp(payload["exp"]) < datetime.utcnow():
+        if datetime.fromtimestamp(payload["exp"]) < datetime.now():
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
         return {"user_id": payload["sub"], "role": payload["role"]}
     except jwt.PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
-@router.websocket("/ws/signal/{exam_id}")
+@ws_request_router.websocket("/ws/signal/{exam_id}")
 async def websocket_endpoint(websocket: WebSocket, exam_id: str, user_info: dict = Depends(get_user_from_cookie)):
     """Main WebSocket endpoint for signaling and messaging."""
     user_id = user_info["user_id"]
@@ -191,3 +197,4 @@ async def websocket_endpoint(websocket: WebSocket, exam_id: str, user_info: dict
             await manager._log_event(conn_info.user_id, "WEBSOCKET_ON_ERROR", f"/ws/signal/{exam_id}", content=LogContent(content=str(e), user_ids=[]))
             await manager.disconnect(websocket, exam_id)
         print(f"WebSocket Error for {exam_id}: {e}")
+    return
