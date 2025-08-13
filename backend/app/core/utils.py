@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import jwt, os
-from typing import List, Literal
-
+from typing import List, Literal, Optional
+from pydantic import BaseModel
 from dotenv import load_dotenv
 from fastapi import Request, HTTPException
 
@@ -13,13 +13,34 @@ def create_jwt(user_id: str, role: str, expires_delta: timedelta) -> tuple[str, 
     """JWT를 생성하고 만료 시간을 반환합니다."""
     expire = datetime.now() + expires_delta
     payload = {
-        "user_id": user_id,
+        "sub": user_id,
         "role": role,
         "exp": expire
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
     return token, expire
 
+
+class UserInfo(BaseModel):
+
+    user_id: str
+    user_role: Literal["examinee", "admin", "supervisor"]
+
+
+def verify_jwt(jwt_token: str) -> UserInfo :
+    try:
+        payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=["HS256"])
+        if datetime.fromtimestamp(payload["exp"]) < datetime.now():
+            raise HTTPException(status_code=401, detail="Token has expired")
+        user_id: str = payload.get("sub")
+        user_role: str = payload.get("role")
+        return UserInfo(user_id=user_id, user_role=user_role)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 class AuthenticationChecker:
     """
@@ -40,15 +61,21 @@ class AuthenticationChecker:
 
         try:
             payload = jwt.decode(jwt_token, JWT_SECRET, algorithms=["HS256"])
-            user_id: str = payload.get("user_id")
+
+            if datetime.fromtimestamp(payload["exp"]) < datetime.now():
+                raise HTTPException(status_code=401, detail="Token has expired")
+
+            user_id: str = payload.get("sub")
             user_role: str = payload.get("role")
 
             if user_role not in self.allowed_roles:
                 raise HTTPException(status_code=403, detail="Permission denied")
-
-            return user_id
+            return UserInfo(user_id=user_id, user_role=user_role)
 
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token has expired")
         except jwt.InvalidTokenError:
             raise HTTPException(status_code=401, detail="Invalid token")
+        except jwt.PyJWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+

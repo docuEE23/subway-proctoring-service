@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from pymongo import AsyncMongoClient
 from beanie import init_beanie
 from typing import TypeVar
-from db import User, Examinee, Verifications, Logs, ExamSession, LoginRequest, EvnetLog
+from backend.app.db.models import User, Examinee, Verifications, Logs, ExamSession, LoginRequest, EvnetLog
 
 load_dotenv()
 

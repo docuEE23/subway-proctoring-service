@@ -2,9 +2,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel, Field
 import bcrypt, secrets
-import jwt
-
-from db import User, LoginRequest, Logs, user_crud
+from backend.app.core import create_jwt
+from backend.app.db import User, LoginRequest, Logs, user_crud
 
 auth_router = APIRouter()
 
@@ -19,20 +18,6 @@ class LoginResponseModel(BaseModel):
     role: str = Field(description="사용자 역할")
     expires_at: datetime = Field(description="토큰 만료 시간")
 
-# --- Helper Functions ---
-
-def create_jwt(user_id: str, role: str, expires_delta: timedelta) -> tuple[str, datetime]:
-    """JWT를 생성하고 만료 시간을 반환합니다."""
-    expire = datetime.now() + expires_delta
-    payload = {
-        "sub": user_id,
-        "role": role,
-        "exp": expire
-    }
-    # In a real application, use a strong, secret key and load it from configuration
-    secret_key = "YOUR_SUPER_SECRET_KEY"
-    token = jwt.encode(payload, secret_key, algorithm="HS256")
-    return token, expire
 
 # --- API Endpoint ---
 

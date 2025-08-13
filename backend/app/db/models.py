@@ -116,8 +116,8 @@ class Logs(Document):
     """
     user_id: Link["User"] = Field(description="로그를 생성한 id")
     generated_at: datetime = Field(default_factory=datetime.now, description="로그 생성 일시")
-    url_path: str = Field(description="The URL path of the request that generated the log.")
-    log_type: str = Field(description="The type of log (e.g., VERIFY_REJECT, EXAM_START).")
+    url_path: str = Field(description="The URL path of the request that generated the log.", min_length=1)
+    log_type: str = Field(description="The type of log (e.g., VERIFY_REJECT, EXAM_START).", min_length=1)
     content: Optional[LogContent] = None
 
     class Settings:
@@ -157,3 +157,49 @@ class FinalReport(Document):
     target_user_id: str = Field(description="보고서 대상의 user_id")
     created_datetime: datetime = Field(default_factory=datetime.now, description="보고서 생성 일시")
     report_url: str = Field(description="생성된 보고서가 위치한 경로")
+
+class ExamQuestionSelection(BaseModel):
+    selection_id: str = Field(description="시험 문항에 있는 선택지 아이디", min_length=5)
+    selection_index: int = Field(description="선택지 인덱스 위치", gt=0)
+    selection_content: str = Field(description="선택지 내용", min_length=1)
+
+class ExamQuestionBody(BaseModel):
+    question_id: str = Field(description="시험 문항 아이디", min_length=5)
+    body_base64: str = Field(description="시험 문항에 있는 '보기' 이미지를 base64 로 저장한 값.", min_length=10)
+
+class ExamQuestionTitle(BaseModel):
+    question_id: str = Field(description="시험 문항 아이디", min_length=5)
+    title_content: str = Field(description="시험 문항의 제목", min_length=5)
+
+class ExamQuestion(BaseModel):
+    question_id: str = Field(description="시험 문항 아이디", min_length=5)
+    question_index: int = Field(description="시험 문항 인덱스", gt=0)
+    title: ExamQuestionTitle
+    bodies: list[ExamQuestionBody]
+    selections: list[ExamQuestionSelection]
+
+class ExamContent(BaseModel):
+    exam_content_id: str
+    schedule_id: str
+    exam_id: str
+    questions: list[ExamQuestion]
+
+class Schedule(BaseModel):
+    schedule_id: str
+    exam_id: str
+    schedule_index: int
+    start_datetime: datetime
+    end_datetime: datetime
+    content_id: str
+
+class Exam(Document):
+
+    exam_title: str = Field(description="시험 제목")
+    exam_id: str = Field(description="연결된 시험의 ID")
+    proctor_id: str = Field(description="담당 감독관의 ID")
+    created_at: datetime = Field(default_factory=datetime.now, description="시험 정보 생성 일시")
+    exam_start_datetime: datetime
+    exam_end_datetime: datetime
+    schedules: list[Schedule]
+    contents: list[ExamContent]
+    expected_examinee_ids: list[str]

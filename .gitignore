@@ -8,7 +8,7 @@ __pycache__/
 *.html
 # C extensions
 *.so
-
+frontend
 # Distribution / packaging
 .Python
 build/

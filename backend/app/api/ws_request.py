@@ -1,28 +1,30 @@
 import asyncio
 from datetime import datetime
-from typing import Dict, List, Optional
-
+from typing import Dict, List, Optional, Literal
 import httpx
-import jwt
-from fastapi import (APIRouter, Cookie, Depends, HTTPException, WebSocket,
-                   WebSocketDisconnect, status)
-from pydantic import BaseModel
-
-from db.models import Logs, LogContent
-from db.model_functions import logs_crud, user_crud
+from fastapi import APIRouter, Depends, WebSocket
+from fastapi import WebSocketDisconnect, status
+from backend.app.db.models import Logs, LogContent
+from backend.app.db.model_functions import logs_crud, user_crud
+from backend.app.core import AuthenticationChecker, UserInfo
 
 # In a real application, load this from a secure configuration
-JWT_SECRET_KEY = "YOUR_SUPER_SECRET_KEY"
 VIDEO_SERVER_URL = "http://localhost:9099/signal/{exam_id}"
 
 ws_request_router = APIRouter()
 
 
-class UserConnectionInfo(BaseModel):
+class UserConnectionInfo:
     """Stores information about a connected user."""
     user_id: str
-    role: str
+    role: Literal["examinee", "admin", "supervisor"]
     websocket: WebSocket
+
+    def __init__(self, user_id: str, role: Literal["examinee", "admin", "supervisor"], websocket: WebSocket):
+        self.user_id = user_id
+        self.role =role
+        self.websocket = websocket
+        return
 
     class Config:
         arbitrary_types_allowed = True
@@ -35,7 +37,7 @@ class ConnectionManager:
         self.connections: Dict[str, List[UserConnectionInfo]] = {}
         return
 
-    async def connect(self, websocket: WebSocket, exam_id: str, user_id: str, role: str):
+    async def connect(self, websocket: WebSocket, exam_id: str, user_id: str, role: Literal["examinee", "admin", "supervisor"]):
         """Accept and store a new WebSocket connection."""
         await websocket.accept()
         connection_info = UserConnectionInfo(user_id=user_id, role=role, websocket=websocket)
@@ -143,26 +145,15 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-def get_user_from_cookie(jwt_token: Optional[str] = Cookie(None)) -> dict:
-    """Dependency to validate JWT from cookie and return user info."""
-    if jwt_token is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing JWT token")
-    try:
-        payload = jwt.decode(jwt_token, JWT_SECRET_KEY, algorithms=["HS256"])
-        if datetime.fromtimestamp(payload["exp"]) < datetime.now():
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has expired")
-        return {"user_id": payload["sub"], "role": payload["role"]}
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-
 @ws_request_router.websocket("/ws/signal/{exam_id}")
-async def websocket_endpoint(websocket: WebSocket, exam_id: str, user_info: dict = Depends(get_user_from_cookie)):
+async def websocket_endpoint(
+        websocket: WebSocket,
+        exam_id: str,
+        user_info: UserInfo = Depends(AuthenticationChecker(role=["admin", "examinee", "supervisor"]))
+):
     """Main WebSocket endpoint for signaling and messaging."""
-    user_id = user_info["user_id"]
-    role = user_info["role"]
 
-    await manager.connect(websocket, exam_id, user_id, role)
+    await manager.connect(websocket, exam_id, user_info.user_id, user_info.user_role)
 
     try:
         while True:
