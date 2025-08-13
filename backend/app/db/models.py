@@ -136,6 +136,7 @@ class EvnetLog(Document):
     A log of all detected cheating events (by AI) and significant actions (by proctors). This is the source for the final report.
     """
     user_id: Link["User"]
+    exam_id: str
     generated_at: datetime = Field(default_factory=datetime.now, description="The exact time the event occurred.")
     event_type: Literal['gaze_off_screen', 'window_switch', 'prohibited_item_detected', 'proctor_snapshot', 'manual_flag']
     severity: Literal['low', 'medium', 'high', 'critical']
@@ -150,3 +151,9 @@ class EvnetLog(Document):
             "user_id", "severity", "event_type", "is_dismissed"
         ]
 
+
+class FinalReport(Document):
+    exam_id: str
+    target_user_id: str = Field(description="보고서 대상의 user_id")
+    created_datetime: datetime = Field(default_factory=datetime.now, description="보고서 생성 일시")
+    report_url: str = Field(description="생성된 보고서가 위치한 경로")

@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 import bcrypt, secrets
 import jwt
 
-from backend.app.db import User, LoginRequest, Logs, user_crud
+from db import User, LoginRequest, Logs, user_crud
 
 auth_router = APIRouter()
 

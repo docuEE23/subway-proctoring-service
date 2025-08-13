@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from db import lifespan
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.api import auth_router
+from api import auth_router
 
 app = FastAPI(lifespan=lifespan)
 # app = FastAPI()
