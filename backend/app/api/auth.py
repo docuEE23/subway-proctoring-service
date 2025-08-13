@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Response, Depends
 from pydantic import BaseModel, Field
 import bcrypt, secrets
-from backend.app.core import create_jwt
+from backend.app.core import create_jwt, UserInfo, AuthenticationChecker
 from backend.app.db import User, LoginRequest, Logs, user_crud
 
 auth_router = APIRouter()
@@ -22,7 +22,7 @@ class LoginResponseModel(BaseModel):
 # --- API Endpoint ---
 
 @auth_router.post("/auth/login", response_model=LoginResponseModel)
-async def login(request: LoginRequestModel = Body(...)):
+async def login(response: Response, request: LoginRequestModel = Body(...)):
     """
     사용자 로그인을 처리하고 JWT를 발급합니다.
     """
@@ -70,12 +70,13 @@ async def login(request: LoginRequestModel = Body(...)):
 
     # 7. 성공 로그 기록
     log_entry = Logs(
-        user_id=user,
+        user_id=user.to_ref(),
         url_path="/auth/login",
         log_type="LOGIN_SUCCESS"
     )
     await log_entry.save()
 
+    response.set_cookie(key="jwt_token", value=token, expires=expires_at)
     return LoginResponseModel(
         token=token,
         role=user.role,
@@ -90,12 +91,14 @@ class TestModel(BaseModel):
 
 
 @auth_router.post("/create_user_test")
-async def create_user_test(request: TestModel = Body(...)):
-    print(request.model_dump())
+async def create_user_test(response: Response, item: TestModel = Body(...)):
+    print(item.model_dump())
     pwd : str = "pwd_" + secrets.token_urlsafe(25)
     user_id: str = "user_id_" + secrets.token_urlsafe(25)
-    user: User = User(user_id=user_id, name=request.name, role=request.role, pwd=pwd)
+    user: User = User(user_id=user_id, name=item.name, role=item.role, pwd=pwd)
     await user_crud.create(user)
+    jwt_token = create_jwt(user_id, item.role, timedelta(minutes=10))
+    response.set_cookie(key="jwt_token", value=jwt_token[0], expires=jwt_token[1])
     return
 
 
@@ -103,6 +106,14 @@ async def create_user_test(request: TestModel = Body(...)):
 async def get_exist_user_test(request: TestModel = Body(...)):
     print(request.model_dump())
     user: User | None = await user_crud.get_by(request.model_dump())
+    if user:
+        return {"result" : user.model_dump_json()}
+    return {"result": "None"}
+
+@auth_router.get("/aut_checker_test")
+async def auth_checker_test(user_info: UserInfo = Depends(AuthenticationChecker(role=["admin", "supervisor", "examinee"]))):
+    print(user_info.model_dump())
+    user: User | None = await user_crud.get_by({"user_id" : user_info.user_id})
     if user:
         return {"result" : user.model_dump_json()}
     return {"result": "None"}
