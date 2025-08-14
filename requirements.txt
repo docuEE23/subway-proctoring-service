@@ -1,0 +1,27 @@
+# requirements.txt (root) — backend + ai_server 통합 의존성
+# Backend (FastAPI + JWT + WebSocket + uploads)
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+starlette>=0.37.2
+python-multipart>=0.0.9
+websockets>=12.0
+orjson>=3.10.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+# DB/Cache (필요 시 사용)
+SQLAlchemy>=2.0.30
+# redis>=5.0.4
+
+# AI Server (CV/추론)
+opencv-python>=4.9.0.80
+numpy>=1.26.4
+mediapipe>=0.10.14
+# onnxruntime>=1.18.0
+# torch>=2.3.0
+# torchvision>=0.18.0
+# tensorflow>=2.16.1
+
+# 공통 유틸
+python-dotenv>=1.0.1
+pydantic-settings>=2.3.0
