@@ -8,50 +8,18 @@ class User(Document):
     """
     사용자(응시자, 감독관, 관리자)의 기본 정보를 저장합니다.
     """
-    user_id: str
+    email: str
     name: str = Field(description="사용자 이름")
-    role: Literal['examinee', 'supervisor', 'admin'] = Field(description="사용자 역할 ")
-    pwd: str = Field(description="암호화된 비번")
+    role: Literal['examinee', 'supervisor', 'admin'] = Field(description="사용자 역할")
+    pwd: str
     created_at: datetime = Field(default_factory=datetime.now, description="생성 일시")
 
     class Settings:
         name = "users"
         validate_on_save = True
         indexes : list = [
-            "user_id", "name", "role"
+            "name", "role", "email"
         ]
-
-class ExamDetectRule(BaseModel):
-    """
-    부정 행위를 탐지할 방법 선택
-    """
-    detect_gaze_off_screen: bool
-    detect_window_switch: bool
-    detect_prohibited_items: bool
-    detect_multiple_faces: bool
-    detect_audio_noise: bool
-
-
-class ExamSession(Document):
-    """
-    생성된 시험에 대한 정보.
-    """
-    session_id: str = Field(description="세션 고유 ID")
-    exam_title: str = Field(description="시험 제목")
-    exam_id: str = Field(description="연결된 시험의 ID")
-    proctor_ids: list[str] = Field(description="담당 감독관들의 ID")
-    created_at: datetime = Field(default_factory=datetime.now, description="세션 생성 일시")
-    expected_examinee: list[Link[User]]
-    detect_rule: ExamDetectRule
-    session_status: Literal['draft', 'ready', 'in_progress', 'paused', 'completed', 'archived']
-
-    class Settings:
-        name = "exam_sessions"
-        validate_on_save = True
-        indexes : list = [
-            "session_id", "exam_id", "proctor_ids"
-        ]
-
 
 
 class LoginRequest(Document):
@@ -60,16 +28,13 @@ class LoginRequest(Document):
     로그인 요청이 올 때마다 request_count 가 증가한다.
     last_request_time 과 현재 datetime 을 비교해서 10 분이 지났다면 1 로 초기화 한다.
     """
-    request_id: str
+    user: User
     last_request_time: datetime
     request_count: int
 
     class Settings:
         name="login_requests"
         validate_on_save = True
-        indexes : list = [
-            "request_id"
-        ]
 
 
 class Examinee(Document):
@@ -77,7 +42,7 @@ class Examinee(Document):
     세션에 참여한 응시자에 대한 정보
     """
     session_id: str = Field(description="참여한 시험 세션 ID")
-    examinee: Link["User"]
+    examinee: User
     exam_id: str
     join_time: datetime = Field(default_factory=datetime.now, description="응시자 참여 시간")
     status: Literal["connected", "disconnected", "active", "inactive"]
@@ -98,7 +63,7 @@ class MediaFiles(BaseModel):
 class Verifications(Document):
 
     exam_id: str
-    examinee_id: Link["Examinee"] = Field(description="로그를 생성한 id")
+    examinee_id: Examinee = Field(description="로그를 생성한 id")
     status: Literal["pending", "approved", "rejected"]
     media_files: list[MediaFiles]
     proctor_id: Optional[str] = None
@@ -122,7 +87,7 @@ class Logs(Document):
     """
     Represents a log entry in the database.
     """
-    user_id: Link["User"] = Field(description="로그를 생성한 id")
+    user: User = Field(description="로그를 생성한 id")
     generated_at: datetime = Field(default_factory=datetime.now, description="로그 생성 일시")
     url_path: str = Field(description="The URL path of the request that generated the log.", min_length=1)
     log_type: str = Field(description="The type of log (e.g., VERIFY_REJECT, EXAM_START).", min_length=1)
@@ -132,18 +97,18 @@ class Logs(Document):
         name = "logs"
         validate_on_save = True
         indexes : list = [
-            "user_id", "log_type"
+             "log_type", "url_path"
         ]
 
 class EventData(BaseModel):
     message: str
     details: Optional[dict] = None
 
-class EvnetLog(Document):
+class EventLog(Document):
     """
     A log of all detected cheating events (by AI) and significant actions (by proctors). This is the source for the final report.
     """
-    user_id: Link["User"]
+    user: User
     exam_id: str
     generated_at: datetime = Field(default_factory=datetime.now, description="The exact time the event occurred.")
     event_type: Literal['gaze_off_screen', 'window_switch', 'prohibited_item_detected', 'proctor_snapshot', 'manual_flag']
@@ -156,7 +121,7 @@ class EvnetLog(Document):
         name = "event_logs"
         validate_on_save = True
         indexes : list = [
-            "user_id", "severity", "event_type", "is_dismissed"
+            "severity", "event_type", "is_dismissed"
         ]
 
 
@@ -193,28 +158,62 @@ class ExamContent(BaseModel):
     questions: list[ExamQuestion]
 
 class Schedule(BaseModel):
+    """
+    시험 스케쥴 정보
+    """
     schedule_id: str
     exam_id: str
-    schedule_index: int
-    start_datetime: datetime
+    schedule_index: int = Field(description="몇 교시 스케줄인가요?")
+    start_datetime: datetime = Field(description="스케줄 시작 시간")
     end_datetime: datetime
-    content_id: str
+    content_id: str = Field(description="현재 스케줄이 사용할 시험지. 즉, exam_content_id")
 
 class Exam(Document):
-
+    """
+    등록된 시험 정보
+    """
     exam_title: str = Field(description="시험 제목")
-    exam_id: str
     proctor_ids: list[str] = Field(description="담당 감독관들의 ID")
     created_at: datetime = Field(default_factory=datetime.now, description="시험 정보 생성 일시")
     exam_start_datetime: datetime
     exam_end_datetime: datetime
-    schedules: list[Schedule]
-    contents: list[ExamContent]
-    expected_examinee_ids: list[str]
+    schedules: list[Schedule] = Field(description="각 교시 정보")
+    contents: list[ExamContent] = Field(description="각 교시마다 사용할 시험지 내용")
+    expected_examinees: list[User]
 
     class Settings:
         name = "exams"
         validate_on_save = True
         indexes : list = [
-            "exam_id", "proctor_ids"
+            "proctor_ids"
         ]
+
+class ExamDetectRule(BaseModel):
+    """
+    부정 행위를 탐지할 방법 선택
+    """
+    detect_gaze_off_screen: bool
+    detect_window_switch: bool
+    detect_prohibited_items: bool
+    detect_multiple_faces: bool
+    detect_audio_noise: bool
+
+
+class ExamSession(Document):
+    """
+    관리자에 의해 생성된 세션
+    """
+    session_id: str = Field(description="세션 고유 ID")
+    proctor_ids: list[str] = Field(description="담당 감독관들의 ID")
+    created_at: datetime = Field(default_factory=datetime.now, description="세션 생성 일시")
+    detect_rule: ExamDetectRule
+    session_status: Literal['draft', 'ready', 'in_progress', 'paused', 'completed', 'archived']
+    exam: Exam
+
+    class Settings:
+        name = "exam_sessions"
+        validate_on_save = True
+        indexes : list = [
+            "session_id",  "proctor_ids"
+        ]
+

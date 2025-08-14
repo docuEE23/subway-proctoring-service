@@ -49,7 +49,7 @@ class AuthenticationChecker:
 
             if user_role not in self.allowed_roles:
                 raise HTTPException(status_code=403, detail="Permission denied")
-            user : User | None = await user_crud.get_by({"user_id" : user_id, "role" : user_role})
+            user : User | None = await user_crud.get_by({"_id" : user_id, "role" : user_role})
             if not user:
                 raise HTTPException(status_code=403, detail="not exist")
             return user

@@ -2,6 +2,7 @@ import asyncio
 from datetime import datetime
 from typing import Dict, List, Optional, Literal
 import httpx
+from bson import ObjectId
 from fastapi import APIRouter, Depends, WebSocket
 from fastapi import WebSocketDisconnect, status
 from backend.app.db import Logs, LogContent, User
@@ -130,10 +131,10 @@ class ConnectionManager:
 
     async def _log_event(self, user_id: str, log_type: str, url_path: str, content: Optional[LogContent] = None):
         """Helper to create and save a log entry."""
-        user = await user_crud.get_by({"user_id": user_id})
+        user = await user_crud.get(ObjectId(user_id))
         if user:
             log_entry = Logs(
-                user_id=user.to_ref(),
+                user=user,
                 log_type=log_type,
                 url_path=url_path,
                 content=content
@@ -153,7 +154,7 @@ async def websocket_endpoint(
 ):
     """Main WebSocket endpoint for signaling and messaging."""
 
-    await manager.connect(websocket, exam_id, user_info.user_id, user_info.role)
+    await manager.connect(websocket, exam_id, str(user_info.id), user_info.role)
 
     try:
         while True:
