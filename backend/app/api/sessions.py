@@ -1,11 +1,11 @@
 from backend.app.core import AuthenticationChecker
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, Cookie
 from backend.app.db import exam_crud, exam_session_crud, user_crud, examinee_crud
 from uuid import uuid4
 from pydantic import BaseModel
 from backend.app.db import ExamDetectRule, ExamSession, User, Examinee, Exam
 from backend.app.db import Logs, logs_crud
-
+from typing import Annotated
 
 session_router = APIRouter(prefix="/session")
 
@@ -16,7 +16,7 @@ class CreateSessionBody(BaseModel):
 
 
 @session_router.post(
-    "/create_session", summary="시험 세션 생성"
+    "/create_session", summary="관리자 시험 세션 생성"
 )
 async def create_session(
     request: Request,
@@ -52,7 +52,7 @@ async def create_session(
     if len(expected_examinees) != len(exam.expected_examinee_ids):
         raise HTTPException(status_code=404, detail="Not all expected examinees were found in the User collection.")
 
-    if not all([exam.exam_title, exam.proctor_id, expected_examinees]):
+    if not all([exam.exam_title, exam.proctor_ids, expected_examinees]):
         raise HTTPException(status_code=400, detail="Missing required data from Exam or User to create a session")
 
     new_session_id = str(uuid4())
@@ -60,7 +60,7 @@ async def create_session(
         session_id=new_session_id,
         exam_title=exam.exam_title,
         exam_id=body.exam_id,
-        proctor_id=exam.proctor_id,
+        proctor_ids=exam.proctor_ids,
         expected_examinee=expected_examinees,
         detect_rule=body.detect_rule,
         session_status='draft'
@@ -73,23 +73,20 @@ async def create_session(
     return {"session_id": new_session_id}
 
 
-class JoinSessionBody(BaseModel):
-    session_id: str
-
-
-@session_router.post("/join_session", summary="시험 세션 참여")
-async def join_session(
+@session_router.post("/join_session", summary="응시자 시험 세션 참여")
+async def examinee_join_session(
     response: Response,
-    body: JoinSessionBody,
+    session_id: Annotated[str | None, Cookie()] = None,
     current_user: User = Depends(AuthenticationChecker(role=["examinee"]))
 ):
     # ## 시험 세션 참여
     # endpoint : POST "/join_session"
-    # join_session 메서드는 body 로 session_id 를 받고, AuthenticationChecker(role=["examinee"]) 를 통해 인증된 사용자 정보를 받습니다.
+    # examinee_join_session 메서드는 body 로 session_id 를 받고,
+    # AuthenticationChecker(role=["examinee"]) 를 통해 인증된 사용자 정보를 받습니다.
 
-    # 먼저 body 로 들어온 session_id 를 통해 ExamSession 이 존재하는지 확인합니다.
+    # 먼저 쿠키에서 가져온 session_id 를 통해 ExamSession 이 존재하는지 확인합니다.
     # 없다면 에러를 발생시킵니다.
-    session : ExamSession | None = await exam_session_crud.get_by({"session_id": body.session_id})
+    session : ExamSession | None = await exam_session_crud.get_by({"session_id": session_id})
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -106,7 +103,7 @@ async def join_session(
     # examinee_crud 를 사용하여 이미 해당 세션에 참여한 응시자인지 확인합니다.
     # 이미 참여했다면, 해당 정보를 반환합니다.
     existing_examinee : Examinee | None = await examinee_crud.get_by(
-        {'session_id': body.session_id, 'examinee': current_user.to_ref()}
+        {'session_id': session_id, 'examinee': current_user.to_ref()}
     )
     if existing_examinee:
         return {"message": "User has already joined the session.", "examinee_info": existing_examinee.model_dump_json()}
@@ -131,3 +128,59 @@ async def join_session(
     # session_id 를 쿠키에 넣어 보냅니다.
     response.set_cookie(key="session_id", value=session.session_id)
     return {"message": "Successfully joined the session."}
+
+
+@session_router.get("/supervisor_join_session/{exam_id}", summary="감독관 시험 참여 및 세션 준비")
+async def supervisor_join_session(
+    exam_id: str,
+    response: Response,
+    current_user: User = Depends(AuthenticationChecker(role=["supervisor"])),
+    session_id: Annotated[str | None, Cookie()] = None,
+):
+    session: ExamSession | None = None
+
+    # 1. 쿠키에 있는 session_id로 세션을 찾아봅니다.
+    if session_id:
+        session = await exam_session_crud.get_by({"session_id": session_id})
+        # 쿠키의 세션 ID가 다른 시험의 것이라면 무시합니다.
+        if session and session.exam_id != exam_id:
+            session = None
+
+    # 2. 쿠키로 세션을 찾지 못했다면, 경로의 exam_id로 세션을 찾아봅니다.
+    if not session:
+        session = await exam_session_crud.get_by({"exam_id": exam_id})
+
+    # 3. 세션을 여전히 찾을 수 없다면, 이 시험에 대한 세션이 존재하지 않는 것입니다.
+    if not session:
+        raise HTTPException(status_code=404, detail="시험 세션을 찾을 수 없습니다. 감독관은 세션을 생성할 수 없습니다.")
+
+    # 4. 감독관이 이 세션에 배정되었는지 확인합니다.
+    if current_user.user_id not in session.proctor_ids:
+        raise HTTPException(status_code=403, detail="이 시험 세션에 배정된 감독관이 아닙니다.")
+
+    # 5. 세션 상태가 참여 가능한지 확인합니다.
+    if session.session_status not in ['draft', 'ready']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"세션에 참여할 수 있는 상태가 아닙니다. 현재 상태: {session.session_status}"
+        )
+
+    # 6. 세션이 'draft' 상태이면 'ready'로 업데이트합니다.
+    if session.session_status == 'draft':
+        await session.update({"$set": {"session_status": "ready"}})
+
+        # 세션 준비 완료 로그를 생성합니다.
+        log = Logs(
+            user_id=current_user.to_ref(),
+            url_path=f"/session/supervisor_join_session/{exam_id}",
+            log_type="SESSION_READY"
+        )
+        await logs_crud.create(log)
+
+        # 쿠키에 session_id를 설정하고 반환합니다.
+        response.set_cookie(key="session_id", value=session.session_id)
+        return {"message": "세션이 준비되었습니다.", "session_id": session.session_id}
+
+    # 7. 세션이 이미 'ready' 상태이면, 참여 완료를 확인합니다.
+    response.set_cookie(key="session_id", value=session.session_id)
+    return {"message": "성공적으로 참여했습니다. 세션은 이미 준비 상태였습니다.", "session_id": session.session_id}

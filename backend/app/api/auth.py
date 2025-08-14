@@ -110,6 +110,7 @@ async def get_exist_user_test(request: TestModel = Body(...)):
         return {"result" : user.model_dump_json()}
     return {"result": "None"}
 
+
 @auth_router.get("/aut_checker_test")
 async def auth_checker_test(user: User = Depends(AuthenticationChecker(role=["admin", "supervisor", "examinee"]))):
     print(user.model_dump())

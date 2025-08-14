@@ -39,9 +39,9 @@ class ExamSession(Document):
     session_id: str = Field(description="세션 고유 ID")
     exam_title: str = Field(description="시험 제목")
     exam_id: str = Field(description="연결된 시험의 ID")
-    proctor_id: str = Field(description="담당 감독관의 ID")
+    proctor_ids: list[str] = Field(description="담당 감독관들의 ID")
     created_at: datetime = Field(default_factory=datetime.now, description="세션 생성 일시")
-    expected_examinee: list[Link['User']]
+    expected_examinee: list[Link[User]]
     detect_rule: ExamDetectRule
     session_status: Literal['draft', 'ready', 'in_progress', 'paused', 'completed', 'archived']
 
@@ -49,7 +49,7 @@ class ExamSession(Document):
         name = "exam_sessions"
         validate_on_save = True
         indexes : list = [
-            "session_id", "exam_id", "proctor_id"
+            "session_id", "exam_id", "proctor_ids"
         ]
 
 
@@ -204,7 +204,7 @@ class Exam(Document):
 
     exam_title: str = Field(description="시험 제목")
     exam_id: str
-    proctor_id: str = Field(description="담당 감독관의 ID")
+    proctor_ids: list[str] = Field(description="담당 감독관들의 ID")
     created_at: datetime = Field(default_factory=datetime.now, description="시험 정보 생성 일시")
     exam_start_datetime: datetime
     exam_end_datetime: datetime
@@ -216,5 +216,5 @@ class Exam(Document):
         name = "exams"
         validate_on_save = True
         indexes : list = [
-            "exam_id", "proctor_id"
+            "exam_id", "proctor_ids"
         ]
