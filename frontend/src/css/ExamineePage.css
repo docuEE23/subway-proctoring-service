@@ -1,0 +1,260 @@
+:root{
+    --bg:#f8fafc; --panel:#ffffff; --muted:#617192; --text:#0f172a;
+    --line:#dbe3f0; --soft:#eef3fb; --acc:#2d7ff9; --acc2:#12a150; --danger:#e23d3d; --warn:#f4b400;
+    --banner:#fff8d6; --banner-border:#ffd66b;
+  }
+  *{
+    box-sizing:border-box
+  }
+  html,body{
+    height:100%
+  }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Noto Sans KR,sans-serif
+  }
+  .app{
+    display:grid;
+    grid-template-rows:auto 1fr;
+    min-height:100vh
+  }
+
+  /* ===== Sticky Banner (Exam / Session) ===== */
+      .exam-banner{
+    position:sticky; 
+    top:0; 
+    z-index:30;
+    width: 100%; 
+    left: 0;
+    grid-column: 1 / -1;
+    display:flex; 
+    align-items:center; 
+    gap:14px; 
+    flex-wrap:wrap;
+    background:var(--banner); 
+    border-bottom:1px solid var(--banner-border);
+    padding:12px 16px; 
+    box-shadow:0 2px 10px rgba(0,0,0,.04);
+  }
+  .exam-title{
+    font-weight:800; 
+    font-size:18px
+  }
+  .kv{
+    display:flex; 
+    gap:8px; 
+    flex-wrap:wrap
+  }
+  .chip{
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:20px; 
+    padding:6px 10px; 
+    font-size:13px; 
+    color:#0f172a
+  }
+  .pill{
+    background:#e9f1ff; 
+    border:1px solid #cfe0ff; 
+    color:#0f172a; 
+    border-radius:999px; 
+    padding:4px 10px; 
+    font-size:12px
+  }
+
+  /* ===== 3-Column Layout ===== */
+  .layout{
+    display:grid; 
+    grid-template-columns:minmax(150px, 15%) 1fr minmax(150px, 15%); 
+    gap:14px; 
+    padding:14px; 
+    align-items:start;
+  }
+  @media (max-width:1200px){ 
+    .layout{
+      grid-template-columns:1fr; 
+    } 
+  }
+
+  .col{
+    display:flex; 
+    flex-direction:column; 
+    gap:14px
+  }
+  .card{
+    background:var(--panel); 
+    border:1px solid var(--line); 
+    border-radius:14px; 
+    padding:12px
+  }
+  .card h3{
+    margin:0 0 8px 0; 
+    font-size:16px
+  }
+  .muted{
+    color:var(--muted)
+  }
+  .video{
+    background:#fafcff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120"><rect fill="%23eef3fb" width="100%" height="100%"/><g fill="%23c3d2ee"><circle cx="60" cy="50" r="16"/><rect x="90" y="38" rx="6" ry="6" width="80" height="24"/></g></svg>') center/60% no-repeat; 
+    border:1px solid var(--line); 
+    border-radius:12px; 
+    height:180px
+  }
+  .row{
+    display:flex; 
+    gap:8px; 
+    align-items:center
+  }
+  .row > *{
+    flex:1
+  }
+  .btn{
+    background:var(--acc); 
+    color:#fff; 
+    border:0; 
+    border-radius:10px; 
+    padding:10px 14px; 
+    cursor:pointer
+  }
+  .btn.secondary{
+    background:#e7ecf6; 
+    color:#0f172a; 
+    border:1px solid var(--line)
+  }
+  .btn.warn{
+    background:var(--warn); 
+    color:#111
+  }
+  .btn.danger{
+    background:var(--danger)
+  }
+
+  /* ===== Chat ===== */
+  .chat{
+    display:flex; 
+    flex-direction:column; 
+    gap:8px; 
+    max-height:260px; 
+    overflow:auto; 
+    border:1px solid var(--line); 
+    border-radius:12px; 
+    padding:10px; 
+    background:#fff
+  }
+  .bubble{
+    max-width:80%; 
+    padding:8px 10px; 
+    border-radius:12px; 
+    border:1px solid var(--line)
+  }
+  .you{
+    align-self:flex-end; 
+    background:#e9f1ff
+  }
+  .them{
+    align-self:flex-start; 
+    background:#fff
+  }
+
+  /* ===== Question Area ===== */
+  .q-head{
+    display:flex; 
+    justify-content:space-between; 
+    align-items:center; 
+    border-bottom:1px solid var(--line); 
+    padding-bottom:8px; 
+    margin-bottom:10px
+  }
+  .q-card{
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:12px; 
+    padding:12px
+  }
+  .opt{
+    display:flex; 
+    gap:10px; 
+    align-items:flex-start; 
+    padding:8px; 
+    border-radius:10px; 
+    border:1px dashed transparent
+  }
+  .opt:hover{
+    background:#f6f9ff; 
+    border-color:#d7e7ff
+  }
+  .opt input{
+    margin-top:3px
+  }
+
+  /* ===== OMR ===== */
+  .omr{
+    display:grid; 
+    grid-template-columns:repeat(1, 1fr); 
+    gap:8px; 
+    max-height:60vh; 
+    overflow:auto
+  }
+  .omr .row{
+    align-items:center
+  }
+  .bubble-omr{
+    display:grid; 
+    grid-template-columns:22px repeat(5,1fr); 
+    gap:6px; 
+    align-items:center; 
+    padding:6px 8px; 
+    background:#fff; 
+    border:1px solid var(--line); 
+    border-radius:10px
+  }
+  .bubble-omr label{
+    display:flex; 
+    gap:6px; 
+    align-items:center; 
+    justify-content:center; 
+    border:1px solid var(--line); 
+    border-radius:8px; 
+    padding:4px 0; 
+    font-size:13px; 
+    cursor:pointer
+  }
+  .bubble-omr input{
+    display:none
+  }
+  .bubble-omr input:checked + span{
+    background:#e9f1ff; 
+    border:1px solid #bcd6ff; 
+    padding:2px 6px; 
+    border-radius:6px
+  }
+
+  .submit-area{
+    position:sticky; 
+    bottom:0; 
+    background:var(--panel); 
+    border-top:1px solid var(--line); 
+    padding:10px; 
+    border-radius:12px
+  }
+  .hint{
+    color:#6b7a91; 
+    font-size:12px
+  }
+  .toast{
+    position:fixed; 
+    right:16px; 
+    bottom:16px; 
+    background:#0f172a; 
+    color:#fff; 
+    border-radius:12px; 
+    padding:12px 14px; 
+    box-shadow:0 4px 16px rgba(0,0,0,.25); 
+    display:none; 
+    z-index:99
+  }
+  .q-nav-buttons {
+    margin-left: 20px;
+  }

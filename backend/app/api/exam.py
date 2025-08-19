@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from backend.app.db.models import Exam, User, ExamSession
 from backend.app.db.model_functions import exam_crud, exam_session_crud
 from backend.app.core.utils import AuthenticationChecker
@@ -36,3 +36,18 @@ async def get_exams_for_examinee(user_info: User = Depends(AuthenticationChecker
             "exam.expected_examinees.id": user_info.id
         }, limit=1000
     )
+
+@exam_router.get(
+    "/admin/get_exam/{exam_id}", response_model=Exam,
+    dependencies=[Depends(AuthenticationChecker(role=["admin"]))]
+)
+async def get_exam_for_admin(exam_id: str):
+    """
+    Returns a single Exam object for an admin.
+    """
+    exam = await exam_crud.get(exam_id)
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+    return exam
+
+# await axios.post(`/${examId}/submit`, formattedAnswers); -> 이것도 처리하는 거 필요
