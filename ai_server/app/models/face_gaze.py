@@ -1,4 +1,18 @@
 from typing import Dict, Optional, Tuple
+self.detector.load()
+if self._fm is None:
+self._fm = _mp_fm.FaceMesh(static_image_mode=True, max_num_faces=1, refine_landmarks=True)
+
+
+def _p2d(self, lm, idx, w, h) -> Optional[Tuple[int,int]]:
+try:
+p = lm.landmark[idx]
+return int(p.x*w), int(p.y*h)
+except Exception:
+return None
+
+
+def _pose(self, face: np.ndarray) -> Optional[Tuple[float, float]]:
 rgb = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
 res = self._fm.process(rgb)
 if not res.multi_face_landmarks: return None
