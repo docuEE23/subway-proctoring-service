@@ -1,9 +1,8 @@
-fastapi==0.111.0
-uvicorn[standard]==0.30.1
-pydantic==2.8.2
-numpy==1.26.4
+fastapi==0.115.2
+uvicorn[standard]==0.30.5
+pydantic==1.10.15
 opencv-python-headless==4.10.0.84
-ultralytics==8.2.103
+# MediaPipe는 numpy<2.0 권장
+numpy==1.26.4
 mediapipe==0.10.14
-deepface==0.0.92
-torch>=2.1.0
+onnxruntime==1.17.3
