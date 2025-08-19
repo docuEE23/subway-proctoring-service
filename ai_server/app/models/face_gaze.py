@@ -1,80 +1,52 @@
-import mediapipe as mp
-import numpy as np
-import cv2
-from app.config import settings
+from typing import Dict, Optional, Tuple
+rgb = cv2.cvtColor(face, cv2.COLOR_BGR2RGB)
+res = self._fm.process(rgb)
+if not res.multi_face_landmarks: return None
+lm = res.multi_face_landmarks[0]
+h, w = face.shape[:2]
+pts = [
+self._p2d(lm, NOSE_TIP, w, h), self._p2d(lm, CHIN, w, h),
+self._p2d(lm, LEFT_EYE_OUT, w, h), self._p2d(lm, RIGHT_EYE_OUT, w, h),
+self._p2d(lm, MOUTH_L, w, h), self._p2d(lm, MOUTH_R, w, h),
+]
+if any(p is None for p in pts): return None
+image_points = np.array(pts, dtype=np.float64)
+# 간단한 3D 모델 (mm)
+model_points = np.array([
+[0.0, 0.0, 0.0], # nose tip
+[0.0, -63.6, -12.5], # chin
+[-43.3, 32.7, -26.0], # left eye outer
+[43.3, 32.7, -26.0], # right eye outer
+[-28.9, -28.9, -24.1], # left mouth
+[28.9, -28.9, -24.1], # right mouth
+])
+focal = w
+cam_matrix = np.array([[focal, 0, w/2],[0, focal, h/2],[0,0,1]], dtype=np.float64)
+dist = np.zeros((4,1))
+ok, rvec, tvec = cv2.solvePnP(model_points, image_points, cam_matrix, dist, flags=cv2.SOLVEPNP_ITERATIVE)
+if not ok: return None
+R, _ = cv2.Rodrigues(rvec)
+sy = np.sqrt(R[0,0]**2 + R[1,0]**2)
+pitch = float(np.degrees(np.arctan2(-R[2,0], sy))) # up/down
+yaw = float(np.degrees(np.arctan2(R[1,0], R[0,0]))) # left/right
+return yaw, pitch
 
-# 간이 시선/존재 추정기:
-# - 존재: 얼굴 랜드마크 검출 성공 여부
-# - 시선: 양 눈/코 끝 기준으로 yaw/pitch 근사
-#   (정밀한 PnP 기반 추정은 TODO로 두고 임계각 기반 간이판단)
 
-class FaceGaze:
-    def __init__(self):
-        self.mesh = mp.solutions.face_mesh.FaceMesh(
-            static_image_mode=False,
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
-        )
-        self.absent_counter = 0
-
-    def _estimate_angles(self, landmarks, img_w, img_h):
-        # 33(코 끝), 263(우측 눈 바깥), 33? -> MediaPipe 인덱스 다수, 여기선 대표값 사용
-        # landmarks: normalized (x,y,z)
-        # 간이 yaw: 좌/우 눈 외곽 중심 대비 코 끝의 좌우 치우침
-        left_idx = 33   # 왼 눈 외곽(근사)
-        right_idx = 263 # 오른 눈 외곽(근사)
-        nose_idx = 1    # 코 브릿지(근사)
-
-        lx, ly = landmarks[left_idx].x * img_w, landmarks[left_idx].y * img_h
-        rx, ry = landmarks[right_idx].x * img_w, landmarks[right_idx].y * img_h
-        nx, ny = landmarks[nose_idx].x * img_w, landmarks[nose_idx].y * img_h
-
-        eye_cx, eye_cy = (lx + rx) / 2.0, (ly + ry) / 2.0
-        dx, dy = nx - eye_cx, ny - eye_cy
-
-        # 픽셀 오프셋을 각도로 근사 (카메라 FoV 가정 60도)
-        # 실제 환경에서는 solvePnP 등으로 교체 권장
-        fov = 60.0
-        norm_x = dx / (img_w / 2.0)  # -1 ~ 1
-        norm_y = dy / (img_h / 2.0)
-        yaw = norm_x * (fov / 2.0)
-        pitch = norm_y * (fov / 2.0)
-        return yaw, pitch
-
-    def analyze(self, img):
-        h, w = img.shape[:2]
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        res = self.mesh.process(img_rgb)
-        events = []
-        face_present = False
-        yaw = pitch = 0.0
-
-        if res.multi_face_landmarks:
-            face_present = True
-            self.absent_counter = 0
-            lm = res.multi_face_landmarks[0].landmark
-            yaw, pitch = self._estimate_angles(lm, w, h)
-
-            if (abs(yaw) >= settings.GAZE_YAW_THRESHOLD) or (abs(pitch) >= settings.GAZE_PITCH_THRESHOLD):
-                events.append({
-                    "type": "GAZE_AWAY",
-                    "score": float(max(abs(yaw)/settings.GAZE_YAW_THRESHOLD,
-                                       abs(pitch)/settings.GAZE_PITCH_THRESHOLD)),
-                    "detail": {"yaw": yaw, "pitch": pitch}
-                })
-        else:
-            self.absent_counter += 1
-            if self.absent_counter >= settings.ABSENT_CONSEC_FRAMES:
-                events.append({
-                    "type": "ABSENT",
-                    "score": 1.0,
-                    "detail": {"consec_frames": self.absent_counter}
-                })
-
-        return events, face_present, yaw, pitch
-
-    def close(self):
-        # mediapipe 솔루션은 컨텍스트 내 자동 해제되지만, 명시적으로 처리
-        pass
+def estimate(self, img: np.ndarray) -> Dict[str, object]:
+self.load()
+boxes = self.detector.detect(img)
+if not boxes:
+return {"direction": "unknown", "confidence": 0.0, "box": None}
+b = max(boxes, key=lambda x: x["w"]*x["h"]) ; x,y,w,h = b["x"],b["y"],b["w"],b["h"]
+face = img[y:y+h, x:x+w]
+if face.size == 0:
+return {"direction": "unknown", "confidence": 0.0, "box": b}
+pose = self._pose(face)
+if pose is None:
+return {"direction": "center", "confidence": 0.3, "box": b}
+yaw, pitch = pose
+horiz = "left" if yaw < -15 else ("right" if yaw > 15 else "center")
+vert = "up" if pitch < -10 else ("down" if pitch > 10 else "center")
+direction = horiz if horiz != "center" else (vert if vert != "center" else "center")
+conf = float(min(1.0, (abs(yaw)/30 + abs(pitch)/20)))
+return {"direction": direction, "confidence": conf, "box": b}
