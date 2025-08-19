@@ -43,16 +43,26 @@ const ExamineePage = ({ examId }) => {
   }, [setChatHistory]);
 
   // --- WebRTC Hook ---
-  const { localStream, startLocalStream } = useWebRTC(examId, token, handleMessageReceived);
+  const { localStream, startLocalStream, startCall, startAIVideoRecording } = useWebRTC(examId, token, handleMessageReceived);
 
   // --- Effects ---
   useEffect(() => {
     // 컴포넌트 마운트 시 웹캠 시작
-    startLocalStream().catch((err) => {
+    startLocalStream().then(stream => {
+      if (stream) {
+        // Once local stream is ready, initiate call to a known supervisor ID for testing
+        // In a real scenario, this targetUserId would be dynamically determined (e.g., from backend, or supervisor sends a signal)
+        // For now, let's assume a supervisor with ID "supervisor1" is connected for this exam.
+        // This needs to be replaced with actual logic for supervisor discovery.
+        const supervisorId = "supervisor1"; // Placeholder: Replace with actual supervisor ID
+        startCall(supervisorId);
+        startAIVideoRecording(); // Start AI video recording
+      }
+    }).catch((err) => {
       console.error("Error starting webcam:", err);
       showToast("웹캠 접근에 실패했습니다. 권한을 허용해주세요.");
     });
-  }, [startLocalStream]);
+  }, [startLocalStream, startCall, startAIVideoRecording]); // Added startAIVideoRecording to dependencies
 
   useEffect(() => {
     const timer = setInterval(

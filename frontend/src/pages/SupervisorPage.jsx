@@ -95,31 +95,7 @@ const SupervisorPage = () => {
     fetchAlerts();
   }, [selectedSessionId]);
 
-  // --- WebRTC 연결 설정 Effect ---
-  useEffect(() => {
-    if (participants.length === 0) return;
-
-    // 각 응시자에 대해 WebRTC 연결 시작
-    participants.forEach((user) => {
-      // PeerConnection 생성 (이때 localStream은 null 또는 빈 스트림이어야 함)
-      const pc = createPeerConnection(user.id, new MediaStream()); // 감독관은 스트림을 보내지 않음
-
-      // Offer 생성
-      pc.createOffer()
-        .then((offer) => pc.setLocalDescription(offer))
-        .then(() => {
-          console.log(`Sending offer to ${user.name}:`, pc.localDescription);
-          signaling.send({
-            type: "offer",
-            to: user.id,
-            sdp: pc.localDescription,
-          });
-        })
-        .catch((err) =>
-          console.error(`Error creating offer for ${user.name}:`, err)
-        );
-    });
-  }, [participants, createPeerConnection, handleAnswer, handleIceCandidate]);
+  
 
   // 사용자 선택 (확대 보기)
   const handleSelectUser = (user) => {
@@ -144,6 +120,7 @@ const SupervisorPage = () => {
       type: 'message',
       content: chatInput,
       to: selectedUser.id, // Send to the selected examinee
+      from: user.user_id, // Added 'from' field
     });
 
     const newMessage = {
