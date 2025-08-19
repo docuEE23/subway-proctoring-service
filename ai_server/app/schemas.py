@@ -1,26 +1,34 @@
+from typing import List, Optional
 from pydantic import BaseModel, Field
-from typing import List, Optional, Literal
 
-class Detection(BaseModel):
-    type: Literal["BANNED_OBJECT", "GAZE_AWAY", "ABSENT"]
-    score: float = 1.0
-    detail: Optional[dict] = None
-    ts: float
 
-class AnalyzeResult(BaseModel):
-    events: List[Detection] = []
-    latency_ms: int = 0
+class ErrorResponse(BaseModel):
+detail: str
 
-class AnalyzeRequestB64(BaseModel):
-    frame_b64: str = Field(..., description="JPEG/PNG base64")
 
-class FaceVerifyRequest(BaseModel):
-    selfie_b64: str
-    idface_b64: str
-    model: str = "ArcFace"  # DeepFace 모델명
+class ImageB64(BaseModel):
+image_b64: str = Field(..., description="base64-encoded image (JPEG/PNG)")
 
-class FaceVerifyResult(BaseModel):
-    is_match: bool
-    distance: float
-    threshold: float
-    model: str
+
+class RTSPRequest(BaseModel):
+rtsp_url: str = Field(..., description="rtsp://user:pass@host:554/...")
+
+
+class FaceBox(BaseModel):
+x: int; y: int; w: int; h: int; score: float
+
+
+class DetectResponse(BaseModel):
+count: int; boxes: List[FaceBox]
+
+
+class VerifyRequest(BaseModel):
+probe_image_b64: str; ref_image_b64: str
+
+
+class VerifyResponse(BaseModel):
+similarity: float; is_match: bool
+
+
+class GazeResponse(BaseModel):
+direction: str; confidence: float; box: Optional[FaceBox] = None
