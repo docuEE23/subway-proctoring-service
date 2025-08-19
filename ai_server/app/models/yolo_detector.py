@@ -1,25 +1,31 @@
-from ultralytics import YOLO
-import cv2
-from typing import List, Tuple
-from app.config import settings
+from typing import List, Dict
+import cv2, numpy as np, mediapipe as mp
 
-class YoloDetector:
-    def __init__(self, weights: str = None, classes: List[str] = None):
-        self.model = YOLO(weights or settings.YOLO_WEIGHTS)
-        self.names = self.model.model.names if hasattr(self.model, "model") else self.model.names
-        self.banned = set((classes or settings.BANNED_CLASSES))
-        # banned 중 실제 모델 클래스에 존재하는 것만 필터링
-        self.valid_banned = {c for c in self.banned if c in self.names.values() or c in self.names}
-    def detect_banned(self, img):
-        res = self.model.predict(img, imgsz=640, conf=0.25, verbose=False)[0]
-        events = []
-        for b in res.boxes:
-            cls_id = int(b.cls.item())
-            cls_name = self.names[cls_id]
-            if cls_name in self.valid_banned:
-                events.append({
-                    "cls": cls_name,
-                    "conf": float(b.conf.item()),
-                    "xyxy": [float(x) for x in b.xyxy[0].tolist()]
-                })
-        return events
+
+_mp_fd = mp.solutions.face_detection
+
+
+class FaceDetector:
+def __init__(self, min_conf: float = 0.6, model_selection: int = 0) -> None:
+self.min_conf = min_conf
+self.model_selection = model_selection
+self._fd = None
+
+
+def load(self) -> None:
+if self._fd is None:
+self._fd = _mp_fd.FaceDetection(model_selection=self.model_selection, min_detection_confidence=self.min_conf)
+
+
+def detect(self, img: np.ndarray) -> List[Dict[str, float]]:
+self.load(); h, w = img.shape[:2]
+rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+res = self._fd.process(rgb)
+out: List[Dict[str, float]] = []
+if not res.detections: return out
+for det in res.detections:
+r = det.location_data.relative_bounding_box
+x1 = int(max(0, r.xmin) * w); y1 = int(max(0, r.ymin) * h)
+x2 = int(min(1.0, r.xmin + r.width) * w); y2 = int(min(1.0, r.ymin + r.height) * h)
+out.append({"x": x1, "y": y1, "w": max(0, x2-x1), "h": max(0, y2-y1), "score": float(det.score[0] if det.score else 0.0)})
+return out
