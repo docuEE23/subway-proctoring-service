@@ -1,64 +1,61 @@
-import time
-from app.utils.image import read_image_from_bytes
-from app.models.yolo_detector import YoloDetector
-from app.models.face_gaze import FaceGaze
-from app.schemas import AnalyzeResult, Detection
-from app.config import settings
+import base64, cv2, numpy as np
+from typing import Dict, Any
 
-class Cooldown:
-    def __init__(self, sec: float):
-        self.sec = sec
-        self.last = {}
 
-    def allow(self, key: str):
-        now = time.time()
-        prev = self.last.get(key, 0)
-        if now - prev >= self.sec:
-            self.last[key] = now
-            return True
-        return False
+from ..utils.config import get_settings
+from ..utils.rtsp import grab_frame
+from ..models.yolo_detector import FaceDetector
+from ..models.face_verify import FaceVerifier
+from ..models.face_gaze import GazeEstimator
+
+
+
+
+def _b64_to_ndarray(data: str) -> np.ndarray:
+raw = base64.b64decode(data)
+arr = np.frombuffer(raw, dtype=np.uint8)
+img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+if img is None: raise ValueError("Invalid image base64")
+return img
+
 
 class Analyzer:
-    def __init__(self):
-        self.detector = YoloDetector()
-        self.gaze = FaceGaze()
-        self.cooldown = Cooldown(settings.EVENT_COOLDOWN_SEC)
+def __init__(self) -> None:
+self.settings = get_settings()
+self.detector = FaceDetector(); self.verifier = FaceVerifier(); self.gazer = GazeEstimator()
 
-    def analyze_bytes(self, img_bytes: bytes) -> AnalyzeResult:
-        t0 = time.time()
-        img = read_image_from_bytes(img_bytes)
 
-        out_events = []
+def preload(self) -> None:
+self.detector.load(); self.verifier.load(); self.gazer.load()
 
-        # 1) 얼굴 존재 & 시선
-        gaze_events, face_present, yaw, pitch = self.gaze.analyze(img)
-        for e in gaze_events:
-            if self.cooldown.allow(e["type"]):
-                out_events.append(Detection(
-                    type="GAZE_AWAY",
-                    score=e["score"],
-                    detail=e.get("detail"),
-                    ts=time.time()
-                ))
-        if not face_present and self.cooldown.allow("ABSENT"):
-            out_events.append(Detection(type="ABSENT", score=1.0, detail=None, ts=time.time()))
 
-        # 2) 금지 물품 탐지 (YOLO)
-        banned = self.detector.detect_banned(img)
-        for b in banned:
-            key = f"BANNED_OBJECT:{b['cls']}"
-            if self.cooldown.allow(key):
-                out_events.append(Detection(
-                    type="BANNED_OBJECT",
-                    score=b["conf"],
-                    detail={"cls": b["cls"], "bbox": b["xyxy"]},
-                    ts=time.time()
-                ))
+# Image APIs
+def detect(self, image_b64: str) -> Dict[str, Any]:
+img = _b64_to_ndarray(image_b64)
+boxes = self.detector.detect(img)
+return {"count": len(boxes), "boxes": boxes}
 
-        return AnalyzeResult(
-            events=out_events,
-            latency_ms=int((time.time() - t0) * 1000)
-        )
 
-    def close(self):
-        self.gaze.close()
+def verify(self, probe_b64: str, ref_b64: str) -> Dict[str, Any]:
+img_p = _b64_to_ndarray(probe_b64)
+img_r = _b64_to_ndarray(ref_b64)
+sim = self.verifier.verify(img_p, img_r)
+if sim is None: return {"similarity": 0.0, "is_match": False}
+return {"similarity": float(sim), "is_match": bool(sim >= self.settings.face_verify_threshold)}
+
+
+def gaze(self, image_b64: str) -> Dict[str, Any]:
+img = _b64_to_ndarray(image_b64)
+return self.gazer.estimate(img)
+
+
+# RTSP APIs – single frame
+def detect_rtsp(self, rtsp_url: str) -> Dict[str, Any]:
+frame = grab_frame(rtsp_url)
+boxes = self.detector.detect(frame)
+return {"count": len(boxes), "boxes": boxes}
+
+
+def gaze_rtsp(self, rtsp_url: str) -> Dict[str, Any]:
+frame = grab_frame(rtsp_url)
+return self.gazer.estimate(frame)
