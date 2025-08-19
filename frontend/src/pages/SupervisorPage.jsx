@@ -20,6 +20,7 @@ const SupervisorPage = () => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatHistory, setChatHistory] = useState({});
   const [chatInput, setChatInput] = useState("");
+  const [audioAlerts, setAudioAlerts] = useState({}); // { userId: boolean } // Added new state
 
   const examId = selectedSessionId; // Use selectedSessionId as examId
 
@@ -53,8 +54,12 @@ const SupervisorPage = () => {
         ...prev,
         [message.from]: [...(prev[message.from] || []), { who: "them", text: `응시자 (${message.from}): ${message.content}` }],
       }));
+    } else if (message.type === 'audio-alert' && message.from) { // Handle audio-alert
+      setAudioAlerts(prev => ({ ...prev, [message.from]: message.level === 'high' }));
+      // Optionally, set a timeout to clear the alert if no 'clear' message is sent
+      // setTimeout(() => setAudioAlerts(prev => ({ ...prev, [message.from]: false })), 5000); // Clear after 5 seconds
     }
-  }, [setChatHistory]);
+  }, [setChatHistory, setAudioAlerts]); // Add setAudioAlerts to dependencies
 
   // --- WebRTC Hook ---
   // 감독관은 자신의 비디오를 보내지 않으므로 localStream은 사용하지 않습니다.
@@ -170,7 +175,7 @@ const SupervisorPage = () => {
                     </div>
                     {/* 웹캠 영상: remoteStreams에서 해당 유저의 스트림을 찾아 WebcamViewer에 전달 */}
                     <div className="video" style={{ marginTop: "8px" }}>
-                      <WebcamViewer stream={remoteStreams[p.id]} />
+                      <WebcamViewer stream={remoteStreams[p.id]} showAlert={audioAlerts[p.id]} />
                     </div>
                     <div className="video" style={{ marginTop: "8px" }}></div>{" "}
                     {/* 손캠 영상 (추후 구현) */}
@@ -215,7 +220,7 @@ const SupervisorPage = () => {
               <h3>선택 응시자: {selectedUser.name}</h3>
               {/* 확대 보기 영상 */}
               <div className="video rel" style={{ height: "320px" }}>
-                <WebcamViewer stream={remoteStreams[selectedUser.id]} />
+                <WebcamViewer stream={remoteStreams[selectedUser.id]} showAlert={audioAlerts[selectedUser.id]} />
               </div>
               <div className="row" style={{ marginTop: "8px" }}>
                 <button
