@@ -7,7 +7,7 @@ from backend.app.db import ExamDetectRule, ExamSession, User, Examinee, Exam
 from backend.app.db import Logs, logs_crud
 from typing import Annotated
 
-session_router = APIRouter(prefix="/session")
+session_router = APIRouter()
 
 
 class CreateSessionBody(BaseModel):

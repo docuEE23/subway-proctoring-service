@@ -55,13 +55,6 @@ async def login(response: Response, request: LoginRequestModel = Body(...)):
         )
         await login_attempt.save()
 
-    # # 5. 비밀번호 검증
-    # if not bcrypt.checkpw(request.password.encode('utf-8'), user.pwd.encode('utf-8')):
-    #     raise HTTPException(
-    #         status_code=401,
-    #         detail={"code": "AUTH_INVALID", "message": "잘못된 아이디 또는 비밀번호입니다."}
-    #     )
-
     # 6. JWT 생성
     await login_attempt.delete() # 성공 시 시도 횟수 리셋
     token, expires_at = create_jwt(str(user.id), user.role, timedelta(hours=1))
