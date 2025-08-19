@@ -6,46 +6,39 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null); // { id, role }
 
   const login = async (id, password, role) => {
-    // --- 기존 API 호출 로직 주석 처리 ---
-    /*
     try {
-      const response = await fetch('/api/v1/login', { // FastAPI 서버 주소
+      const response = await fetch('/api/v1/auth/login', { // FastAPI 서버 주소
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id, password, role }),
+        body: JSON.stringify({ user_id: id, password }),
       });
 
       if (!response.ok) {
         // 서버가 4xx, 5xx 응답을 반환했을 때 에러를 발생시킴
         const errorData = await response.json();
-        throw new Error(errorData.detail || '로그인에 실패했습니다.');
+        let errorMessage = '로그인에 실패했습니다.';
+        if (errorData.detail) {
+          if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (errorData.detail.message) { // Assuming detail is an object with a 'message' property
+            errorMessage = errorData.detail.message;
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const userData = await response.json(); // { id, role, ... }
-      setUser({ id: userData.id, role: userData.role });
+      const userData = await response.json(); // { token, role, expires_at }
+      setUser({ id: null, role: userData.role }); // Set id to null as backend does not provide it directly in LoginResponseModel
 
-      // (선택사항) JWT 토큰을 사용하는 경우 로컬 스토리지에 저장
-      // if (userData.access_token) {
-      //   localStorage.setItem('token', userData.access_token);
-      // }
+      // JWT token is now handled by HttpOnly cookie set by backend.
+      // No need to store in localStorage here.
 
     } catch (error) {
       // 네트워크 에러나 위에서 throw된 에러를 다시 throw하여
       // 호출한 컴포넌트(LoginPage)에서 처리할 수 있도록 함
       throw error;
-    }
-    */
-
-    // --- 테스트용 임시 로그인 로직 ---
-    console.log(`Attempting mock login for role: ${role} with id: ${id}`);
-    if (password === '1234') {
-      // 역할에 따라 사용자 정보 설정
-      setUser({ id: id, role: role });
-      console.log(`Mock login successful for user: ${id}, role: ${role}`);
-    } else {
-      throw new Error('비밀번호가 일치하지 않습니다. (테스트용 비밀번호는 1234 입니다)');
     }
   };
 

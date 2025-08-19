@@ -1,6 +1,12 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Navigate } from "react-router-dom"; // Added Navigate
 import "../css/ExamineePage.css";
 import WebcamViewer from "../components/WebcamViewer";
+import useWebRTC from "../hooks/useWebRTC"; // useWebRTC 훅 import
+import signaling from "../services/signaling";
+
+
+import { useAuth } from "../contexts/AuthContext";
 
 // --- Mock Data ---
 const MOCK_QUESTIONS = Array.from({ length: 30 }).map((_, i) => ({
@@ -9,7 +15,9 @@ const MOCK_QUESTIONS = Array.from({ length: 30 }).map((_, i) => ({
   options: ["Java", "Python", "C++", "HTML", "JavaScript"],
 }));
 
-const ExamineePage = () => {
+const ExamineePage = ({ examId }) => {
+  const { user } = useAuth();
+  const token = localStorage.getItem('token');
   // --- State Variables ---
   const [questions] = useState(MOCK_QUESTIONS);
   const [currentQ, setCurrentQ] = useState(1);
@@ -21,11 +29,31 @@ const ExamineePage = () => {
   ]);
   const [chatInput, setChatInput] = useState("");
   const [toast, setToast] = useState({ show: false, message: "" });
-  const [webcamStream, setWebcamStream] = useState(null); // New state for webcam stream
 
   const chatListRef = useRef(null);
 
-  // --- Timer Effect ---
+  // Callback for receiving messages from useWebRTC
+  const handleMessageReceived = useCallback((message) => {
+    if (message.type === 'message' && message.content) {
+      setChatHistory((prev) => [
+        ...prev,
+        { who: "them", text: `감독관: ${message.content}` }, // Assuming messages from backend are from supervisor
+      ]);
+    }
+  }, [setChatHistory]);
+
+  // --- WebRTC Hook ---
+  const { localStream, startLocalStream } = useWebRTC(examId, token, handleMessageReceived);
+
+  // --- Effects ---
+  useEffect(() => {
+    // 컴포넌트 마운트 시 웹캠 시작
+    startLocalStream().catch((err) => {
+      console.error("Error starting webcam:", err);
+      showToast("웹캠 접근에 실패했습니다. 권한을 허용해주세요.");
+    });
+  }, [startLocalStream]);
+
   useEffect(() => {
     const timer = setInterval(
       () => setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0)),
@@ -34,40 +62,33 @@ const ExamineePage = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // --- Chat Scroll Effect ---
   useEffect(() => {
     if (chatListRef.current) {
       chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
     }
   }, [chatHistory]);
 
-  // --- Webcam Effect ---
+  // --- 창 전환 감지 Effect ---
   useEffect(() => {
-    let currentStream; // Declare a variable to hold the stream for cleanup
+    const handleVisibilityChange = () => {
+      // 시험이 진행 중일 때 (timeLeft > 0) 페이지만 숨겨졌을 경우
+      if (timeLeft > 0 && document.hidden) {
+        // 응시자에게 경고 메시지 표시
+        showToast("경고: 시험 화면을 벗어났습니다.");
 
-    const startWebcam = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
-        setWebcamStream(stream);
-        currentStream = stream; // Store the stream for cleanup
-      } catch (err) {
-        console.error("Error accessing webcam:", err);
-        showToast("웹캠 접근에 실패했습니다. 권한을 허용해주세요.");
+        // 감독관에게 알림 전송 (콘솔에 로그로 대체)
+        console.warn(" 부정행위 감지: 창 전환");
+        signaling.send({ type: "alert", detail: "window_switch" });
       }
     };
 
-    startWebcam();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    // Cleanup: stop webcam stream when component unmounts
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
     return () => {
-      if (currentStream) {
-        // Use the stream from the closure
-        currentStream.getTracks().forEach((track) => track.stop());
-      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []); // Empty dependency array: runs only once on mount
+  }, [timeLeft]); // timeLeft가 변경될 때마다 이펙트를 재실행하여 최신 상태를 참조
 
   // --- Utility Functions ---
   const formatTime = (seconds) => {
@@ -91,6 +112,12 @@ const ExamineePage = () => {
       showToast("메시지를 입력하세요");
       return;
     }
+    // Send message via WebSocket
+    signaling.send({
+      type: 'message',
+      content: chatInput,
+    });
+
     setChatHistory((prev) => [
       ...prev,
       { who: "you", text: `응시자: ${chatInput}` },
@@ -164,7 +191,7 @@ const ExamineePage = () => {
           <div className="card">
             <h3>내 웹캠</h3>
             <div className="video">
-              <WebcamViewer stream={webcamStream} />
+              <WebcamViewer stream={localStream} />
             </div>
             <div className="row">
               <button

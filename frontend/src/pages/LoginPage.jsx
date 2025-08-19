@@ -9,38 +9,16 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const { user, login } = useAuth();
 
-  if (user) {
-    switch (user.role) {
-      case "examinee":
-        return <Navigate to="/examinee" />;
-      case "supervisor":
-        return <Navigate to="/supervisor" />;
-      case "admin":
-        return <Navigate to="/admin" />;
-      default:
-        return <Navigate to="/" />;
-    }
-  }
+  
 
   const handleLogin = async (requiredRole) => {
     try {
       // AuthContext의 login 함수 호출
       await login(id, password, requiredRole);
 
-      switch (requiredRole) {
-        case "examinee":
-          navigate("/examinee");
-          break;
-        case "supervisor":
-          navigate("/supervisor");
-          break;
-        case "admin":
-          navigate("/admin");
-          break;
-        default:
-          // 이 경우는 발생하지 않아야 함
-          break;
-      }
+      // After successful login, navigate to a default authenticated route
+      // ProtectedRoute will then handle role-based redirection
+      navigate("/"); // Navigate to the root, which will then redirect to /login if not authenticated, or to the correct role page if authenticated.
     } catch (error) {
       alert(error.message || "로그인에 실패했습니다. 다시 시도해주세요.");
     }
